@@ -19,6 +19,12 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import java.io.ByteArrayOutputStream;
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 public class Camera extends AppCompatActivity {
     private static final int REQUEST_IMAGE_CAPTURE = 1;
@@ -154,11 +160,40 @@ public class Camera extends AppCompatActivity {
             return;
         }
 
+        // Convert the bitmap to a JPEG byte array
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
         canvasBitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream);
         byte[] byteArray = stream.toByteArray();
 
-        // Use an HTTP library to send the photo
-        Toast.makeText(this, "Photo sent to server!", Toast.LENGTH_SHORT).show();
+        // Define the server URL
+        String serverUrl = "http://192.168.0.3:8080"; // Replace with your server's IP and port
+
+        // Use a background thread to send the photo
+        new Thread(() -> {
+            try {
+                OkHttpClient client = new OkHttpClient();
+
+                // Create a request body with raw image data
+                RequestBody requestBody = RequestBody.create(byteArray, MediaType.parse("image/jpeg"));
+
+                // Build the request
+                Request request = new Request.Builder()
+                        .url(serverUrl)
+                        .post(requestBody) // Send raw data
+                        .addHeader("Content-Type", "image/jpeg") // Ensure content type is set
+                        .build();
+
+                // Execute the request
+                Response response = client.newCall(request).execute();
+                if (response.isSuccessful()) {
+                    runOnUiThread(() -> Toast.makeText(this, "Photo sent successfully!", Toast.LENGTH_SHORT).show());
+                } else {
+                    runOnUiThread(() -> Toast.makeText(this, "Failed to send photo: " + response.message(), Toast.LENGTH_SHORT).show());
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                runOnUiThread(() -> Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+            }
+        }).start();
     }
 }
