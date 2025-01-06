@@ -50,9 +50,19 @@ fun MenuDrawer(navController: NavController) {
         // History Option
         ClickableText(
             text = AnnotatedString("History"),
-            style = TextStyle(fontSize = 18.sp),
+            style = TextStyle(fontSize = 24.sp),
             onClick = {
                 navController.navigate("history")
+            }
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Settings Option
+        ClickableText(
+            text = AnnotatedString("Settings"),
+            style = TextStyle(fontSize = 24.sp),
+            onClick = {
+                navController.navigate("settings")
             }
         )
     }

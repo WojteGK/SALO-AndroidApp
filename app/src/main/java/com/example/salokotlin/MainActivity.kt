@@ -16,6 +16,9 @@ import java.io.File
 
 class MainActivity : ComponentActivity() {
 
+    private val defaultPhotoLimit = 30 // Default number of photos to retain
+    private val sharedPreferencesName = "AppSettings"
+
     private val requestPermissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
             val cameraGranted = permissions[Manifest.permission.CAMERA] ?: false
@@ -25,13 +28,14 @@ class MainActivity : ComponentActivity() {
             if (cameraGranted && storageWriteGranted && storageReadGranted) {
                 Toast.makeText(this, "Permissions granted!", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(this, "Permissions denied!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Permissions denied! The app may not function correctly.", Toast.LENGTH_LONG).show()
             }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Check and request permissions
         if (!arePermissionsGranted()) {
             requestPermissionsLauncher.launch(
                 arrayOf(
@@ -42,16 +46,21 @@ class MainActivity : ComponentActivity() {
             )
         }
 
+        // Clear app cache and maintain photo history
         clearCache()
-        deleteOldPhotos()
+        deleteOldPhotos(getMaxPhotoLimit())
 
+        // Launch Compose UI
         setContent {
             SaloKotlinTheme {
-                AppNavigation()
+                AppNavigation(context = this)
             }
         }
     }
 
+    /**
+     * Check if all necessary permissions are granted.
+     */
     private fun arePermissionsGranted(): Boolean {
         val cameraPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
         val writePermission = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
@@ -62,17 +71,42 @@ class MainActivity : ComponentActivity() {
                 readPermission == PackageManager.PERMISSION_GRANTED
     }
 
+    /**
+     * Clear app's external cache directory.
+     */
     private fun clearCache() {
         val cacheDir = externalCacheDir
-        cacheDir?.listFiles()?.forEach { it.delete() }
+        cacheDir?.listFiles()?.forEach { file ->
+            if (file.isFile) file.delete()
+        }
     }
-    private fun deleteOldPhotos() {
+
+    /**
+     * Delete photos from the ProcessedPhotos directory, keeping only the most recent photos as per the user setting.
+     */
+    private fun deleteOldPhotos(maxPhotosToRetain: Int) {
         val folder = File(getExternalFilesDir("ProcessedPhotos"), "")
         if (!folder.exists()) return
 
         val files = folder.listFiles()
         files?.sortedByDescending { it.lastModified() }
-            ?.drop(30) // Keep the last 30 photos
+            ?.drop(maxPhotosToRetain) // Keep the user-specified number of photos
             ?.forEach { it.delete() }
+    }
+
+    /**
+     * Save the maximum number of photos to retain in history.
+     */
+    fun saveMaxPhotoLimit(maxPhotos: Int) {
+        val sharedPreferences = getSharedPreferences(sharedPreferencesName, MODE_PRIVATE)
+        sharedPreferences.edit().putInt("maxPhotosToRetain", maxPhotos).apply()
+    }
+
+    /**
+     * Retrieve the maximum number of photos to retain in history.
+     */
+    fun getMaxPhotoLimit(): Int {
+        val sharedPreferences = getSharedPreferences(sharedPreferencesName, MODE_PRIVATE)
+        return sharedPreferences.getInt("maxPhotosToRetain", defaultPhotoLimit)
     }
 }
