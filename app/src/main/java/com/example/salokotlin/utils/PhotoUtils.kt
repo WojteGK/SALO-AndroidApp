@@ -2,11 +2,17 @@ package com.example.salokotlin.utils
 
 import android.content.Context
 import android.graphics.*
+import android.util.Log
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
+import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.media.ExifInterface
+
 
 /**
  * Draw bounding boxes on the photo based on provided coordinates.
@@ -15,19 +21,29 @@ import java.util.*
  * @param boundingBoxes List of bounding boxes to draw on the photo.
  * @return A Bitmap with bounding boxes drawn.
  */
-fun drawBoundingBoxesOnPhoto(photoPath: String, boundingBoxes: List<Rect>): Bitmap {
-    val originalBitmap = BitmapFactory.decodeFile(photoPath)
-    val mutableBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
+fun drawBoundingBoxesOnPhoto(
+    imagePath: String,
+    boundingBoxes: Map<String, List<Rect>>,
+    selectedGroup: String? = null
+): Bitmap {
+    Log.d("PhotoUtils", "Drawing boxes on $imagePath with $boundingBoxes")
+    val originalBitmap = BitmapFactory.decodeFile(imagePath)
+    val scaledBitmap = scaleBitmapToFitBoundingBox(originalBitmap)
 
+    val mutableBitmap = scaledBitmap.copy(Bitmap.Config.ARGB_8888, true)
     val canvas = Canvas(mutableBitmap)
     val paint = Paint().apply {
-        color = Color.RED
         style = Paint.Style.STROKE
-        strokeWidth = 8f
+        color = Color.RED
+        strokeWidth = 5f
     }
 
-    for (box in boundingBoxes) {
-        canvas.drawRect(box, paint)
+    boundingBoxes.forEach { (group, boxes) ->
+        if (selectedGroup == null || selectedGroup == group) {
+            boxes.forEach { rect ->
+                canvas.drawRect(rect, paint)
+            }
+        }
     }
 
     return mutableBitmap
@@ -56,30 +72,65 @@ fun saveBitmapToFile(context: Context, bitmap: Bitmap): String {
 
 
 /**
- * Parse bounding boxes from the server response.
+ * Parse grouped bounding boxes from the server response.
  *
  * @param response The server response as a JSON string.
- * @return A list of Rect objects representing bounding boxes.
+ * @return A map of group names to lists of Rect objects representing bounding boxes.
  */
-fun parseBoundingBoxesFromResponse(response: String): List<Rect> {
-    val boundingBoxes = mutableListOf<Rect>()
+fun parseGroupedBoundingBoxesFromResponse(response: String): Map<String, List<Rect>> {
+    val groupedBoundingBoxes = mutableMapOf<String, List<Rect>>()
+    if (response.isEmpty()) {
+        Log.e("PhotoUtils", "Empty response body received")
+        return groupedBoundingBoxes
+    }
 
     try {
         val jsonObject = JSONObject(response)
-        val boxesArray = jsonObject.getJSONArray("bounding_boxes")
-
-        for (i in 0 until boxesArray.length()) {
-            val boxObject = boxesArray.getJSONObject(i)
-            val x = boxObject.getInt("x")
-            val y = boxObject.getInt("y")
-            val width = boxObject.getInt("width")
-            val height = boxObject.getInt("height")
-
-            boundingBoxes.add(Rect(x, y, x + width, y + height))
+        jsonObject.keys().forEach { group ->
+            val boundingBoxes = jsonObject.getJSONArray(group).let { jsonArray ->
+                List(jsonArray.length()) { index ->
+                    val bbox = jsonArray.getJSONObject(index)
+                    Rect(
+                        bbox.getInt("x1"),
+                        bbox.getInt("y1"),
+                        bbox.getInt("x2"),
+                        bbox.getInt("y2")
+                    )
+                }
+            }
+            groupedBoundingBoxes[group] = boundingBoxes
         }
-    } catch (e: Exception) {
-        e.printStackTrace()
+    } catch (e: JSONException) {
+        Log.e("PhotoUtils", "Error parsing bounding boxes: ${e.message}", e)
     }
 
-    return boundingBoxes
+    return groupedBoundingBoxes
+}
+
+
+fun scaleBitmapToFitBoundingBox(bitmap: Bitmap, maxDimension: Int = 450): Bitmap {
+    val width = bitmap.width
+    val height = bitmap.height
+    val scalingFactor = minOf(maxDimension.toFloat() / width, maxDimension.toFloat() / height)
+
+    val scaledWidth = (width * scalingFactor).toInt()
+    val scaledHeight = (height * scalingFactor).toInt()
+    return Bitmap.createScaledBitmap(bitmap, scaledWidth, scaledHeight, true)
+}
+
+fun correctBitmapOrientation(filePath: String): Bitmap {
+    val bitmap = BitmapFactory.decodeFile(filePath)
+
+    // Read EXIF metadata to determine the orientation
+    val exif = ExifInterface(filePath)
+    val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+
+    val matrix = Matrix()
+    when (orientation) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+        ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+        ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+    }
+
+    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 }

@@ -21,8 +21,30 @@ fun SaloKotlinTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
+    val colors = if (darkTheme) {
+        darkColors(
+            primary = DarkPrimary,
+            primaryVariant = DarkPrimaryVariant,
+            secondary = DarkSecondary,
+            background = DarkBackground,
+            surface = DarkSurface,
+            onPrimary = DarkOnPrimary,
+            onSecondary = DarkOnSecondary
+        )
+    } else {
+        lightColors(
+            primary = LightPrimary,
+            primaryVariant = LightPrimaryVariant,
+            secondary = LightSecondary,
+            background = LightBackground,
+            surface = LightSurface,
+            onPrimary = LightOnPrimary,
+            onSecondary = LightOnSecondary
+        )
+    }
+
     MaterialTheme(
-        colors = if (darkTheme) darkColors() else lightColors(),
+        colors = colors,
         typography = Typography,
         shapes = Shapes,
         content = content

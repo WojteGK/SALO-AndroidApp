@@ -1,5 +1,7 @@
 package com.example.salokotlin.ui.components
 
+import android.graphics.Bitmap
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Environment
 import android.util.Log
@@ -11,15 +13,9 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.Button
-import androidx.compose.material.Icon
-import androidx.compose.material.IconButton
-import androidx.compose.material.Scaffold
-import androidx.compose.material.Text
-import androidx.compose.material.TopAppBar
+import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.rememberScaffoldState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -27,18 +23,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.example.salokotlin.network.uploadPhoto
+import com.example.salokotlin.utils.correctBitmapOrientation
+import com.example.salokotlin.utils.drawBoundingBoxesOnPhoto
+import com.example.salokotlin.utils.parseGroupedBoundingBoxesFromResponse
+import com.example.salokotlin.utils.saveBitmapToFile
 import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import androidx.navigation.NavController
-import com.example.salokotlin.utils.drawBoundingBoxesOnPhoto
-import com.example.salokotlin.utils.parseBoundingBoxesFromResponse
-import com.example.salokotlin.utils.saveBitmapToFile
 
 @Composable
 fun CameraXScreen(navController: NavController) {
@@ -50,14 +47,20 @@ fun CameraXScreen(navController: NavController) {
 
     val cameraExecutor: ExecutorService = remember { Executors.newSingleThreadExecutor() }
     var capturedPhotoPath by remember { mutableStateOf<String?>(null) }
+    var correctedPhotoPath by remember { mutableStateOf<String?>(null) }
+    var serverResponse by remember { mutableStateOf<Map<String, List<Rect>>?>(null) }
     val coroutineScope = rememberCoroutineScope()
+    var selectedGroup by remember { mutableStateOf<String?>(null) }
+
+    var currentImagePath by remember { mutableStateOf<String?>(null) } // For tracking the current image path
+    var expanded by remember { mutableStateOf(false) } // For DropdownMenu state
 
     val scaffoldState = rememberScaffoldState()
 
     Scaffold(
         scaffoldState = scaffoldState,
         drawerContent = {
-            MenuDrawer(navController = navController) // Include the MenuDrawer here
+            MenuDrawer(navController = navController)
         },
         topBar = {
             TopAppBar(
@@ -77,9 +80,11 @@ fun CameraXScreen(navController: NavController) {
         Column(modifier = Modifier.padding(paddingValues)) {
             if (capturedPhotoPath == null) {
                 // Camera Preview
-                Box(modifier = Modifier
-                    .weight(1f)
-                    .aspectRatio(4f / 3f)) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .aspectRatio(4f / 3f)
+                ) {
                     AndroidView(factory = { ctx ->
                         val previewView = PreviewView(ctx)
 
@@ -130,6 +135,12 @@ fun CameraXScreen(navController: NavController) {
 
                                 override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                                     capturedPhotoPath = photoFile.absolutePath
+                                    coroutineScope.launch {
+                                        // Correct the photo's orientation and scale it
+                                        val correctedBitmap = correctBitmapOrientation(capturedPhotoPath!!)
+                                        correctedPhotoPath = saveBitmapToFile(context, correctedBitmap) // Save the corrected photo
+                                        currentImagePath = correctedPhotoPath // Set the current image path
+                                    }
                                     Log.d("CameraXScreen", "Photo saved: $capturedPhotoPath")
                                 }
                             }
@@ -140,19 +151,86 @@ fun CameraXScreen(navController: NavController) {
                     Text("Capture Photo")
                 }
             } else {
-                // Display Captured Photo
-                Box(modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(16.dp)) {
-                    Image(
-                        painter = rememberAsyncImagePainter(model = capturedPhotoPath),
-                        contentDescription = "Captured Photo",
-                        modifier = Modifier.fillMaxSize()
+                // Display captured photo
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    currentImagePath?.let {
+                        Image(
+                            painter = rememberAsyncImagePainter(it),
+                            contentDescription = "Captured Photo",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+
+                // Display object count for selected group
+                selectedGroup?.let { group ->
+                    val objectCount = serverResponse?.get(group)?.size ?: 0
+                    Text(
+                        text = "Group $group: $objectCount objects",
+                        style = MaterialTheme.typography.h6,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        color = MaterialTheme.colors.primary
                     )
                 }
 
-                // Buttons
+                // Dropdown for selecting group
+                if (serverResponse != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text("Select Group: ", modifier = Modifier.padding(end = 8.dp))
+                        Box {
+                            Button(onClick = { expanded = true }) {
+                                Text(selectedGroup ?: "Select Group")
+                            }
+                            DropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false }
+                            ) {
+                                serverResponse!!.keys.forEach { group ->
+                                    DropdownMenuItem(onClick = {
+                                        selectedGroup = group
+                                        expanded = false
+                                        coroutineScope.launch {
+                                            try {
+                                                // Always start from the corrected photo
+                                                val baseImagePath = correctedPhotoPath!!
+                                                val boundingBoxes = serverResponse!![group] ?: emptyList()
+
+                                                // Draw bounding boxes for the selected group only
+                                                val bitmapWithBoundingBoxes = drawBoundingBoxesOnPhoto(
+                                                    baseImagePath, // Reset to clean, corrected photo
+                                                    mapOf(group to boundingBoxes) // Draw only the selected group's bounding boxes
+                                                )
+
+                                                // Save the updated image with bounding boxes
+                                                val updatedPhotoPath = saveBitmapToFile(context, bitmapWithBoundingBoxes)
+                                                currentImagePath = updatedPhotoPath // Update the image path for display
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                                                Log.e("CameraXScreen", "Error updating bounding boxes", e)
+                                            }
+                                        }
+                                    }) {
+                                        Text(group)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Buttons for sending or retaking the photo
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -161,14 +239,20 @@ fun CameraXScreen(navController: NavController) {
                 ) {
                     Button(onClick = {
                         coroutineScope.launch {
-                            val photoUri = Uri.fromFile(File(capturedPhotoPath!!))
-                            val serverResponse = uploadPhoto(context, photoUri)
-                            val boundingBoxes = parseBoundingBoxesFromResponse(serverResponse)
+                            try {
+                                val photoUri = Uri.fromFile(File(correctedPhotoPath!!))
+                                val responseString = uploadPhoto(context, photoUri)
 
-                            val bitmapWithBoundingBoxes = drawBoundingBoxesOnPhoto(capturedPhotoPath!!, boundingBoxes)
-                            val updatedPhotoPath = saveBitmapToFile(context, bitmapWithBoundingBoxes)
+                                // Parse and store server response for bounding boxes
+                                serverResponse = parseGroupedBoundingBoxesFromResponse(responseString)
 
-                            capturedPhotoPath = updatedPhotoPath
+                                // Do not draw any bounding boxes yet
+                                currentImagePath = correctedPhotoPath
+                                selectedGroup = null
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                                Log.e("CameraXScreen", "Error during photo upload or processing", e)
+                            }
                         }
                     }) {
                         Text("Send Photo")
@@ -176,6 +260,10 @@ fun CameraXScreen(navController: NavController) {
 
                     Button(onClick = {
                         capturedPhotoPath = null
+                        correctedPhotoPath = null
+                        currentImagePath = null
+                        serverResponse = null
+                        selectedGroup = null
                     }) {
                         Text("Retake Photo")
                     }
