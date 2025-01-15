@@ -64,7 +64,7 @@ fun CameraXScreen(navController: NavController) {
         },
         topBar = {
             TopAppBar(
-                title = { Text("Camera App") },
+                title = { Text("SALO App") },
                 navigationIcon = {
                     IconButton(onClick = {
                         coroutineScope.launch {
