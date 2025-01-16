@@ -77,34 +77,35 @@ fun saveBitmapToFile(context: Context, bitmap: Bitmap): String {
  * @param response The server response as a JSON string.
  * @return A map of group names to lists of Rect objects representing bounding boxes.
  */
-fun parseGroupedBoundingBoxesFromResponse(response: String): Map<String, List<Rect>> {
-    val groupedBoundingBoxes = mutableMapOf<String, List<Rect>>()
-    if (response.isEmpty()) {
-        Log.e("PhotoUtils", "Empty response body received")
-        return groupedBoundingBoxes
-    }
-
+fun parseGroupedBoundingBoxesFromResponse(response: String): Pair<Map<String, List<Rect>>, List<String>> {
     try {
         val jsonObject = JSONObject(response)
-        jsonObject.keys().forEach { group ->
-            val boundingBoxes = jsonObject.getJSONArray(group).let { jsonArray ->
-                List(jsonArray.length()) { index ->
-                    val bbox = jsonArray.getJSONObject(index)
-                    Rect(
-                        bbox.getInt("x1"),
-                        bbox.getInt("y1"),
-                        bbox.getInt("x2"),
-                        bbox.getInt("y2")
-                    )
-                }
-            }
-            groupedBoundingBoxes[group] = boundingBoxes
-        }
-    } catch (e: JSONException) {
-        Log.e("PhotoUtils", "Error parsing bounding boxes: ${e.message}", e)
-    }
 
-    return groupedBoundingBoxes
+        // Parse detections
+        val detections = jsonObject.getJSONObject("detections")
+        val boundingBoxes = mutableMapOf<String, List<Rect>>()
+        for (groupKey in detections.keys()) {
+            val groupArray = detections.getJSONArray(groupKey)
+            val groupRects = mutableListOf<Rect>()
+            for (i in 0 until groupArray.length()) {
+                val box = groupArray.getJSONObject(i)
+                val rect = Rect(box.getInt("x1"), box.getInt("y1"), box.getInt("x2"), box.getInt("y2"))
+                groupRects.add(rect)
+            }
+            boundingBoxes[groupKey] = groupRects
+        }
+
+        // Parse groups
+        val groupNames = mutableListOf<String>()
+        val groupsArray = jsonObject.getJSONArray("groups")
+        for (i in 0 until groupsArray.length()) {
+            groupNames.add(groupsArray.getString(i))
+        }
+
+        return Pair(boundingBoxes, groupNames)
+    } catch (e: Exception) {
+        throw IllegalArgumentException("Error parsing response: ${e.message}")
+    }
 }
 
 

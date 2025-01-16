@@ -28,12 +28,14 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
+import com.example.salokotlin.network.sendGroupAssignments
 import com.example.salokotlin.network.uploadPhoto
 import com.example.salokotlin.utils.correctBitmapOrientation
 import com.example.salokotlin.utils.drawBoundingBoxesOnPhoto
 import com.example.salokotlin.utils.parseGroupedBoundingBoxesFromResponse
 import com.example.salokotlin.utils.saveBitmapToFile
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -55,11 +57,14 @@ fun CameraXScreen(navController: NavController) {
     var capturedPhotoPath by remember { mutableStateOf<String?>(null) }
     var correctedPhotoPath by remember { mutableStateOf<String?>(null) }
     var serverResponse by remember { mutableStateOf<Map<String, List<Rect>>?>(null) }
+    var namedGroups by remember { mutableStateOf<List<String>?>(null) }
     val coroutineScope = rememberCoroutineScope()
     var selectedGroup by remember { mutableStateOf<String?>(null) }
-
-    var currentImagePath by remember { mutableStateOf<String?>(null) } // For tracking the current image path
-    var expanded by remember { mutableStateOf(false) } // For DropdownMenu state
+    var assignments by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var currentImagePath by remember { mutableStateOf<String?>(null) }
+    var responseReceived by remember { mutableStateOf(false) }
+    var expandedGroupDropdown by remember { mutableStateOf(false) }
+    var expandedNamedGroupDropdown by remember { mutableStateOf(false) }
 
     val scaffoldState = rememberScaffoldState()
 
@@ -159,10 +164,9 @@ fun CameraXScreen(navController: NavController) {
                                 override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                                     capturedPhotoPath = photoFile.absolutePath
                                     coroutineScope.launch {
-                                        // Correct the photo's orientation and scale it
                                         val correctedBitmap = correctBitmapOrientation(capturedPhotoPath!!)
-                                        correctedPhotoPath = saveBitmapToFile(context, correctedBitmap) // Save the corrected photo
-                                        currentImagePath = correctedPhotoPath // Set the current image path
+                                        correctedPhotoPath = saveBitmapToFile(context, correctedBitmap)
+                                        currentImagePath = correctedPhotoPath
                                     }
                                     Log.d("CameraXScreen", "Photo saved: $capturedPhotoPath")
                                 }
@@ -178,7 +182,7 @@ fun CameraXScreen(navController: NavController) {
                     Text("Capture Photo", fontWeight = FontWeight.Bold)
                 }
             } else {
-                // Display captured photo
+                // Display Image
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -194,62 +198,72 @@ fun CameraXScreen(navController: NavController) {
                     }
                 }
 
-                // Display object count for selected group
-                selectedGroup?.let { group ->
-                    val objectCount = serverResponse?.get(group)?.size ?: 0
-                    Text(
-                        text = "Group $group: $objectCount objects",
-                        style = MaterialTheme.typography.h6,
+                // Dropdowns and Assignments
+                serverResponse?.let { response ->
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        color = MaterialTheme.colors.primary
-                    )
-                }
-
-                // Dropdown for selecting group
-                if (serverResponse != null) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.Center
+                            .padding(16.dp)
                     ) {
-                        Text("Select Group: ", modifier = Modifier.padding(end = 8.dp))
-                        Box {
-                            Button(onClick = { expanded = true }) {
-                                Text(selectedGroup ?: "Select Group")
-                            }
-                            DropdownMenu(
-                                expanded = expanded,
-                                onDismissRequest = { expanded = false }
-                            ) {
-                                serverResponse!!.keys.forEach { group ->
-                                    DropdownMenuItem(onClick = {
-                                        selectedGroup = group
-                                        expanded = false
-                                        coroutineScope.launch {
-                                            try {
-                                                // Always start from the corrected photo
-                                                val baseImagePath = correctedPhotoPath!!
-                                                val boundingBoxes = serverResponse!![group] ?: emptyList()
-
-                                                // Draw bounding boxes for the selected group only
+                        // Group Selection Dropdown
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Select Group")
+                            Box {
+                                Button(onClick = { expandedGroupDropdown = true }) {
+                                    Text(selectedGroup ?: "Select Group")
+                                }
+                                DropdownMenu(
+                                    expanded = expandedGroupDropdown,
+                                    onDismissRequest = { expandedGroupDropdown = false }
+                                ) {
+                                    response.keys.forEach { group ->
+                                        DropdownMenuItem(onClick = {
+                                            selectedGroup = group
+                                            expandedGroupDropdown = false
+                                            coroutineScope.launch {
+                                                val boundingBoxes = response[group] ?: emptyList()
                                                 val bitmapWithBoundingBoxes = drawBoundingBoxesOnPhoto(
-                                                    baseImagePath, // Reset to clean, corrected photo
-                                                    mapOf(group to boundingBoxes) // Draw only the selected group's bounding boxes
+                                                    correctedPhotoPath!!,
+                                                    mapOf(group to boundingBoxes)
                                                 )
+                                                currentImagePath = saveBitmapToFile(context, bitmapWithBoundingBoxes)
+                                            }
+                                        }) {
+                                            Text(group)
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
-                                                // Save the updated image with bounding boxes
-                                                val updatedPhotoPath = saveBitmapToFile(context, bitmapWithBoundingBoxes)
-                                                currentImagePath = updatedPhotoPath // Update the image path for display
-                                            } catch (e: Exception) {
-                                                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                                                Log.e("CameraXScreen", "Error updating bounding boxes", e)
+                        // Named Group Assignment Dropdown
+                        selectedGroup?.let { group ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Assign to Named Group")
+                                Box {
+                                    Button(onClick = { expandedNamedGroupDropdown = true }) {
+                                        Text(assignments[group] ?: "Select Named Group")
+                                    }
+                                    DropdownMenu(
+                                        expanded = expandedNamedGroupDropdown,
+                                        onDismissRequest = { expandedNamedGroupDropdown = false }
+                                    ) {
+                                        namedGroups?.forEach { namedGroup ->
+                                            DropdownMenuItem(onClick = {
+                                                assignments = assignments.toMutableMap().apply {
+                                                    this[group] = namedGroup
+                                                }
+                                                expandedNamedGroupDropdown = false
+                                            }) {
+                                                Text(namedGroup)
                                             }
                                         }
-                                    }) {
-                                        Text(group)
                                     }
                                 }
                             }
@@ -257,35 +271,43 @@ fun CameraXScreen(navController: NavController) {
                     }
                 }
 
-                // Buttons for sending or retaking the photo
+                // Buttons for Sending Assignments or Retaking the Photo
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 80.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    Button(onClick = {
-                        coroutineScope.launch {
-                            try {
-                                val photoUri = Uri.fromFile(File(correctedPhotoPath!!))
-                                val responseString = uploadPhoto(context, photoUri)
-
-                                // Parse and store server response for bounding boxes
-                                serverResponse = parseGroupedBoundingBoxesFromResponse(responseString)
-
-                                // Do not draw any bounding boxes yet
-                                currentImagePath = correctedPhotoPath
-                                selectedGroup = null
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                                Log.e("CameraXScreen", "Error during photo upload or processing", e)
+                    if (!responseReceived) {
+                        Button(onClick = {
+                            coroutineScope.launch {
+                                try {
+                                    val photoUri = Uri.fromFile(File(correctedPhotoPath!!))
+                                    val responseString = uploadPhoto(context, photoUri)
+                                    val (detections, groups) = parseGroupedBoundingBoxesFromResponse(responseString)
+                                    serverResponse = detections
+                                    namedGroups = groups
+                                    responseReceived = true
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
                             }
+                        }) {
+                            Text("Send Photo")
                         }
-                    },
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50.dp))
-                    ) {
-                        Text("Send Photo")
+                    } else {
+                        Button(onClick = {
+                            coroutineScope.launch {
+                                try {
+                                    sendGroupAssignments(context, assignments)
+                                    Toast.makeText(context, "Assignments sent successfully!", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }) {
+                            Text("Send Assignments")
+                        }
                     }
 
                     Button(onClick = {
@@ -293,7 +315,11 @@ fun CameraXScreen(navController: NavController) {
                         correctedPhotoPath = null
                         currentImagePath = null
                         serverResponse = null
+                        namedGroups = null
+                        assignments = emptyMap()
                         selectedGroup = null
+                        responseReceived = false
+                    }) {
                     },
                         modifier = Modifier
                             .clip(RoundedCornerShape(50.dp))
