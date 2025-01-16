@@ -97,3 +97,19 @@ fun correctBitmapOrientation(bitmap: Bitmap, orientation: Int): Bitmap {
     return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 }
 
+suspend fun sendGroupAssignments(context: Context, assignments: Map<String, String>) {
+    val uniqueId = UniqueIdManager.getOrCreateUniqueId(context)
+
+    // Add headers
+    val headers = mapOf("X-Device-ID" to uniqueId)
+
+    // Make the network request with JSON body
+    try {
+        RetrofitClient.apiService.sendGroupAssignments(headers, assignments)
+        Log.d("sendGroupAssignments", "Assignments sent successfully.")
+    } catch (e: Exception) {
+        Log.e("sendGroupAssignments", "Error sending assignments: ${e.message}", e)
+        throw e // Rethrow if needed for UI error handling
+    }
+}
+
