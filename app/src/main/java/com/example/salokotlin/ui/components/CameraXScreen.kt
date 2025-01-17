@@ -13,12 +13,15 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -36,6 +39,9 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.painterResource
+import com.example.salokotlin.R
 
 @Composable
 fun CameraXScreen(navController: NavController) {
@@ -79,6 +85,21 @@ fun CameraXScreen(navController: NavController) {
     ) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues)) {
             if (capturedPhotoPath == null) {
+
+                Box(
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center // Wyśrodkowanie poziome
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.salo_logo), // Replace with your avatar drawable
+                        contentDescription = "App Logo",
+                        modifier = Modifier
+                            .size(120.dp)
+                    )
+                }
+
                 // Camera Preview
                 Box(
                     modifier = Modifier
@@ -113,7 +134,9 @@ fun CameraXScreen(navController: NavController) {
                         }, ContextCompat.getMainExecutor(context))
 
                         previewView
-                    }, modifier = Modifier.fillMaxSize())
+                    }, modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 25.dp))
                 }
 
                 // Capture Photo Button
@@ -146,9 +169,13 @@ fun CameraXScreen(navController: NavController) {
                             }
                         )
                     },
-                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .width(200.dp) // Węższa szerokość
+                        .padding(bottom = 40.dp)
+                        .clip(RoundedCornerShape(50.dp))
                 ) {
-                    Text("Capture Photo")
+                    Text("Capture Photo", fontWeight = FontWeight.Bold)
                 }
             } else {
                 // Display captured photo
@@ -234,7 +261,7 @@ fun CameraXScreen(navController: NavController) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .padding(bottom = 80.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     Button(onClick = {
@@ -254,7 +281,10 @@ fun CameraXScreen(navController: NavController) {
                                 Log.e("CameraXScreen", "Error during photo upload or processing", e)
                             }
                         }
-                    }) {
+                    },
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50.dp))
+                    ) {
                         Text("Send Photo")
                     }
 
@@ -264,7 +294,10 @@ fun CameraXScreen(navController: NavController) {
                         currentImagePath = null
                         serverResponse = null
                         selectedGroup = null
-                    }) {
+                    },
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50.dp))
+                    ) {
                         Text("Retake Photo")
                     }
                 }

@@ -17,5 +17,5 @@ val DarkPrimaryVariant = Color(0xFF3700B3) // Replace with your darkPrimaryVaria
 val DarkSecondary = Color(0xFF03DAC5) // Replace with your darkSecondary
 val DarkBackground = Color(0xFF121212) // Replace with dark background color
 val DarkSurface = Color(0xFF121212) // Replace with dark surface color
-val DarkOnPrimary = Color(0xFF000000) // Replace with dark onPrimary color
+val DarkOnPrimary = Color(0xFFFFFFFF) // Replace with dark onPrimary color
 val DarkOnSecondary = Color(0xFFFFFFFF) // Replace with dark onSecondary color
