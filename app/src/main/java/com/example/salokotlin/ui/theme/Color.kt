@@ -12,7 +12,7 @@ val LightOnPrimary = Color(0xFFFFFFFF) // Replace with onPrimary color
 val LightOnSecondary = Color(0xFF000000) // Replace with onSecondary color
 
 // Dark Theme Colors
-val DarkPrimary = Color(0xFFBB86FC) // Replace with your dark theme primary
+val DarkPrimary = Color(0xFF6200EE) // Replace with your dark theme primary
 val DarkPrimaryVariant = Color(0xFF3700B3) // Replace with your darkPrimaryVariant
 val DarkSecondary = Color(0xFF03DAC5) // Replace with your darkSecondary
 val DarkBackground = Color(0xFF121212) // Replace with dark background color
