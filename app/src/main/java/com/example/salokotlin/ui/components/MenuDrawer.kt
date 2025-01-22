@@ -26,22 +26,19 @@ fun MenuDrawer(navController: NavController) {
         // User Profile Section
         Row(
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp)
+                .padding(top = 16.dp)
         ) {
             Image(
-                painter = painterResource(id = R.drawable.user_avatar), // Replace with your avatar drawable
-                contentDescription = "User Avatar",
+                painter = painterResource(id = R.drawable.salo_logo), // Replace with your avatar drawable
+                contentDescription = "App Logo",
                 modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
+                    .size(150.dp)
+                    .align(Alignment.CenterVertically)
             )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text("John Doe", style = MaterialTheme.typography.h6)
-                Text("john.doe@example.com", style = MaterialTheme.typography.body2)
-            }
+
         }
 
         // Separator
@@ -50,7 +47,8 @@ fun MenuDrawer(navController: NavController) {
         // History Option
         ClickableText(
             text = AnnotatedString("History"),
-            style = TextStyle(fontSize = 24.sp),
+            style = TextStyle(fontSize = 24.sp,
+                color = MaterialTheme.colors.onSurface),
             onClick = {
                 navController.navigate("history")
             }
@@ -60,7 +58,8 @@ fun MenuDrawer(navController: NavController) {
         // Settings Option
         ClickableText(
             text = AnnotatedString("Settings"),
-            style = TextStyle(fontSize = 24.sp),
+            style = TextStyle(fontSize = 24.sp,
+                color = MaterialTheme.colors.onSurface),
             onClick = {
                 navController.navigate("settings")
             }

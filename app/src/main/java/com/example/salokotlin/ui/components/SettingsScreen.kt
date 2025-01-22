@@ -3,6 +3,7 @@ package com.example.salokotlin.ui.components
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Button
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
@@ -13,7 +14,9 @@ import androidx.compose.material.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -75,7 +78,11 @@ fun SettingsScreen(context: Context, navController: NavController) {
                     mainActivity.saveMaxPhotoLimit(maxPhotosToSave)
                     Toast.makeText(context, "Max photos to save updated to $maxPhotosToSave", Toast.LENGTH_SHORT).show()
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .padding(top = 40.dp)
+                    .align(Alignment.CenterHorizontally)
+                    .width(200.dp)
+                    .clip(RoundedCornerShape(50.dp))
             ) {
                 Text("Save Setting")
             }
@@ -88,7 +95,10 @@ fun SettingsScreen(context: Context, navController: NavController) {
                     clearHistory(context)
                     Toast.makeText(context, "History cleared!", Toast.LENGTH_SHORT).show()
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .width(200.dp)
+                    .clip(RoundedCornerShape(50.dp))
             ) {
                 Text("Clear History")
             }
